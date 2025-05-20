@@ -3,17 +3,64 @@ import numpy as np
 class AdjTM:
     def __init__(self, vector):
         self.index_map = {val: i for i, val in enumerate(set(vector))}
+        self.reverse_map = {i: val for val, i in self.index_map.items()}
         self.TM = np.zeros((len(self.index_map), len(self.index_map)), dtype = int)
         for i in range(len(vector) - 1):
             m = self.index_map[vector[i]]
             n = self.index_map[vector[i + 1]]
             self.TM[m, n] += 1
             self.TM[n, m] += 1
+    
+    @classmethod        
+    def from_parts(cls, index_map, reverse_map, TM):
+        adjTM = AdjTM([])
+        adjTM.index_map = index_map 
+        adjTM.reverse_map = reverse_map
+        adjTM.TM = TM
+        return adjTM
+            
+    def __add__(self, other):
+        keys = set(self.index_map) | set(other.index_map)
+        index_map = {val: i for i, val in enumerate(keys)}
+        reverse_map = {i: val for val, i in index_map.items()}
+        TM = np.zeros((len(index_map), len(index_map)), dtype = int)
+        for tm in (self, other):
+           for key in keys:
+                m = index_map[key]
+                for val in tm.index_map:
+                    if key in tm.index_map:
+                        n = index_map[val]
+                        paths = tm.get_entry(key, val)
+                        TM[m, n] += paths
+        return AdjTM.from_parts(index_map, reverse_map, TM)
+    
+    def __mul__(self, other):
+        if isinstance(other, (float, int)):
+            return AdjTM.from_parts(self.index_map, self.reverse_map, self.TM * other)
+        if isinstance(other, AdjTM):
+            if other.index_map == self.index_map:
+                return AdjTM.from_parts(self.index_map, self.reverse_map, self.TM @ other.TM)
+            else:
+                raise ValueError("Arguments with different nodes")
+        raise TypeError("Unrecognized argument type")
+            
+    def get_entry(self, nodeA, nodeB):
+        return self.TM[self.index_map[nodeA], self.index_map[nodeB]]
+    
+    def get_row(self, node):
+        return self.TM[self.index_map[node], :]
+    
+    def get_column(self, node):
+        return self.TM[:, self.index_map[node]]
+    
+    def get_node(self, index):
+        return self.reverse_map[index]
         
     def add_vector(self, vector):
         old_length = len(self.index_map)
         for val in set(vector):
             if val not in self.index_map:
+                self.reverse_map[len(self.index_map)] = val
                 self.index_map[val] = len(self.index_map)
         if old_length !=  len(self.index_map):
             newTM = np.zeros((len(self.index_map), len(self.index_map)), dtype=int)
@@ -25,24 +72,11 @@ class AdjTM:
             self.TM[m, n] += 1
             self.TM[n, m] += 1
             
-    @staticmethod
-    def add_TM(adjTM0, adjTM1):
-        adjTM = AdjTM([])
-        keys = set(adjTM0.index_map) | set(adjTM1.index_map)
-        index_map = {val: i for i, val in enumerate(keys)}
-        TM = np.zeros((len(index_map), len(index_map)), dtype = int)
-        removed = set()
-        for key in keys:
-            removed.add(key)
-            m = index_map[key]
-            for tm in (adjTM0, adjTM1):
-                for val in tm.index_map:
-                    if val not in removed:
-                        n = index_map[val]
-                        paths = tm.TM[tm.index_map[key], tm.index_map[val]]
-                        TM[m, n] += paths
-                        TM[n, m] += paths
-        adjTM.index_map = index_map
-        adjTM.TM = TM
-        return adjTM
-        
+a1 = AdjTM([1, 2, 3, 4, 1, 1, 2, 3, 1])
+print(a1.TM)
+a2 = AdjTM([1, 6, 4, 3])
+print(a2.TM)
+print((a1 + a2).TM)
+print((a2 * a2).TM)
+a1.add_vector([1, 6, 4, 3])
+print(a1.TM)
