@@ -147,7 +147,7 @@ def expand_image(file, pixels, side = 'r'):
   bgr = []
   for channel in [BLUE, GREEN, RED]:
     U, S, V = img_SVD(f'Input\\{file}', channel)
-    bgr.append(np.zeros((len(U), len(V[0]))))
+    bgr.append(np.zeros((len(U), len(V[0]) + pixels)))
     tree = KDTree(list(get_pairs(channel, 'U')))
     for i in range(len(S)):
       u = np.round(U[:, i] * S[i] ** 0.5, DECIMALS)
@@ -170,7 +170,7 @@ def expand_image(file, pixels, side = 'r'):
         else:
           v[pixels - j] = exp_aggregate_TM.get_node(np.argmax(entry_probs))
         exp_aggregate_TM *= aggregate_TM
-      bgr[channel] += np.array(u).reshape(-1, 1) @ np.array(u).reshape(1, -1)
+      bgr[channel] += np.array(u).reshape(-1, 1) @ np.array(v).reshape(1, -1)
   return bgr  
 
         
