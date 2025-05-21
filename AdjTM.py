@@ -18,31 +18,41 @@ class AdjTM:
         adjTM.reverse_map = reverse_map
         adjTM.TM = TM
         return adjTM
+    
+    @classmethod        
+    def copy(cls, other):
+        adjTM = AdjTM([])
+        adjTM.index_map = other.index_map 
+        adjTM.reverse_map = other.reverse_map
+        adjTM.TM = other.TM
+        return adjTM
             
     def __add__(self, other):
         keys = set(self.index_map) | set(other.index_map)
         index_map = {val: i for i, val in enumerate(keys)}
         reverse_map = {i: val for val, i in index_map.items()}
         TM = np.zeros((len(index_map), len(index_map)), dtype = int)
-        for tm in (self, other):
-           for key in keys:
-                m = index_map[key]
+        for key in keys:
+            m = index_map[key]
+            for tm in (self, other):
                 for val in tm.index_map:
-                    if key in tm.index_map:
-                        n = index_map[val]
-                        paths = tm.get_entry(key, val)
-                        TM[m, n] += paths
+                    n = index_map[val]
+                    TM[m, n] += tm.TM[m, n]
         return AdjTM.from_parts(index_map, reverse_map, TM)
     
     def __mul__(self, other):
         if isinstance(other, (float, int)):
             return AdjTM.from_parts(self.index_map, self.reverse_map, self.TM * other)
         if isinstance(other, AdjTM):
-            if other.index_map == self.index_map:
+            if list(other.index_map.keys()) == list(self.index_map.keys()):
                 return AdjTM.from_parts(self.index_map, self.reverse_map, self.TM @ other.TM)
             else:
                 raise ValueError("Arguments with different nodes")
         raise TypeError("Unrecognized argument type")
+    
+    def stochastic(self):
+        col_sums = self.TM.sum(axis = 0, keepdims = True)
+        return AdjTM.from_parts(self.index_map, self.reverse_map, self.TM / col_sums)
             
     def get_entry(self, nodeA, nodeB):
         return self.TM[self.index_map[nodeA], self.index_map[nodeB]]
@@ -62,8 +72,8 @@ class AdjTM:
             if val not in self.index_map:
                 self.reverse_map[len(self.index_map)] = val
                 self.index_map[val] = len(self.index_map)
-        if old_length !=  len(self.index_map):
-            newTM = np.zeros((len(self.index_map), len(self.index_map)), dtype=int)
+        if old_length != len(self.index_map):
+            newTM = np.zeros((len(self.index_map), len(self.index_map)), dtype = int)
             newTM[:self.TM.shape[0], :self.TM.shape[1]] = self.TM
             self.TM = newTM
         for i in range(len(vector) - 1):
@@ -71,12 +81,3 @@ class AdjTM:
             n = self.index_map[vector[i + 1]]
             self.TM[m, n] += 1
             self.TM[n, m] += 1
-            
-a1 = AdjTM([1, 2, 3, 4, 1, 1, 2, 3, 1])
-print(a1.TM)
-a2 = AdjTM([1, 6, 4, 3])
-print(a2.TM)
-print((a1 + a2).TM)
-print((a2 * a2).TM)
-a1.add_vector([1, 6, 4, 3])
-print(a1.TM)

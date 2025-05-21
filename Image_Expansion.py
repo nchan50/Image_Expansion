@@ -8,33 +8,9 @@ from AdjTM import AdjTM
 
 BLUE, GREEN, RED = 0, 1, 2 # Constants for color channels
 BGR = ['BLUE', 'GREEN', 'RED']
-WRITE_OVER_FILES = False
+WRITE_OVER_FILES = True
+PRINT_LOG = True
 DECIMALS = 3
-
-# Creates pkl file to store ordered tuple pairs
-for color in BGR:
-  path = f'Database\\TM\\{color}'
-  os.makedirs(f'{path}\\U', exist_ok = True)
-  if not os.path.exists(f'{path}\\U\\pairs.pkl')
-    with open(f'{path}\\U\\pairs', 'wb') as f:
-      pickle.dump(set(), f)
-  os.makedirs(f'{path}\\V', exist_ok = True)
-  if not os.path.exists(f'{path}\\V\\pairs.pkl')
-    with open(f'{path}\\V\\pairs', 'wb') as f:
-      pickle.dump(set(), f)
-  
-# Creates pkl file to store transition matrix
-for color in BGR:
-  path = f'Database\\TM\\{color}'
-  os.makedirs(f'{path}\\U', exist_ok = True)
-  if not os.path.exists(f'{path}\\U\\transition.pkl')
-    with open(f'{path}\\U\\transition', 'wb') as f:
-      pickle.dump(AdjTM([]), f)
-  os.makedirs(f'{path}\\V', exist_ok = True)
-  if not os.path.exists(f'{path}\\V\transition.pkl')
-    with open(f'{path}\\V\\transition', 'wb') as f:
-      pickle.dump(AdjTM([]), f)
-
 
 def img_SVD(file, channel):
   u, s, v = np.linalg.svd(cv.imread(file)[:, :, channel], full_matrices = False)
@@ -45,14 +21,14 @@ def img_SVD(file, channel):
       U.append(u[:, c])
       S.append(s[c])
       V.append(v[c, :])
-  return np.array(U), np.array(S), np.array(V) # Turn list into arrays
+  return np.array(U).T, np.array(S), np.array(V) # Turn list into arrays
       
 def store_USV(U, S, V, directory, name):
   path = f'Database\\{directory}'
   os.makedirs(path, exist_ok = True) # Creates directory
   if not os.path.exists(f'{path}\\{name}.npz') or WRITE_OVER_FILES:
     np.savez(f'{path}\\{name}', U = U, S = S, V = V) # Saves the U, S, and V arrays in a .npz file
-  else:
+  elif PRINT_LOG:
     print(f'{path}\\{name}.npz already exists.')
 
 def store_string(arr, directory, name):
@@ -60,53 +36,79 @@ def store_string(arr, directory, name):
   os.makedirs(path, exist_ok = True) # Creates directory
   if not os.path.exists(f'{path}\\{name}') or WRITE_OVER_FILES:
     np.savetxt(f'{path}\\{name}', arr, fmt='%.2f') # Saves an array in a text file
-  else:
+  elif PRINT_LOG:
     print(f'{path}\\{name} already exists.')
     
 def store_TM(vector, channel, orientation):
-  path = f'Database\\TM\\{channel}\\{orientation}'
-  with open(f'{path}\\transition.pkl', 'wb') as f:
-    pickle.dump(pickle.load(f).add_vector(vector), f)
+  file = f'Database\\TM\\{BGR[channel]}\\{orientation}\\transition.pkl'
+  try:
+   with open(file, 'rb') as f:
+     TM = pickle.load(f)
+  except IOError:
+    TM = AdjTM([])
+    with open(file, 'wb') as f:
+      pickle.dump(AdjTM([]), f)
+  TM.add_vector(vector)
+  with open(file, 'wb') as f:
+    pickle.dump(TM, f)
     
 def store_pair_TM(vector, channel, orientation, pair):
-  path = f'Database\\TM\\{channel}\\{orientation}'
-  name = f'pair_{min(pair)}_{max(pair)}'
+  path = f'Database\\TM\\{BGR[channel]}\\{orientation}'
+  name = f'pair_{min(pair)}_{max(pair)}.pkl'
   os.makedirs(path, exist_ok = True) # Creates directory
-  if not os.path.exists(f'{path}\\{name}.pkl'):
+  if not os.path.exists(f'{path}\\{name}') or WRITE_OVER_FILES:
     with open(f'{path}\\{name}', 'wb') as f:
       pickle.dump(AdjTM(vector), f) # Saves AdjTM object in a pkl file
   else:
+    with open(f'{path}\\{name}', 'rb') as f:
+      TM = pickle.load(f)
     with open(f'{path}\\{name}', 'wb') as f:
-      pickle.dump(pickle.load(f).add_vector(vector), f)
+      pickle.dump(TM.add_vector(vector), f)
+  try:
+    with open(f'{path}\\pairs.pkl', 'rb') as f:
+      pairs = pickle.load(f)
+  except IOError:
+    pairs = set()
+    with open(f'{path}\\pairs.pkl', 'wb') as f:
+      pickle.dump(pairs, f)
+  pairs.add((min(pair), max(pair)))
   with open(f'{path}\\pairs.pkl', 'wb') as f:
-      pickle.dump(pickle.load(f).add((min(pair)_max(pair))), f)
+    pickle.dump(pairs, f)
     
 def get_USV(name, channel, usv = 'USV'):
   # usv: Letters determine which arrays are returned 
-  file = f'Database\\{name}\\{channel}.npz'
+  file = f'Database\\{name}\\{BGR[channel]}.npz'
   if os.path.isfile(file):
     arrs = list()
     for i in ['U', 'S', 'V']:
       if i in usv:
         arrs.append(np.load(file)[i])
     return tuple(arrs)
-  else:
+  elif PRINT_LOG:
     print(f'The file {file} does not exist.')
     
 def get_TM(channel, orientation):
-  file = f'Database\\TM\\{channel}\\{orientation}\\transition.pkl'
+  file = f'Database\\TM\\{BGR[channel]}\\{orientation}\\transition.pkl'
   if os.path.isfile(file):
-    with open(file, 'wb') as f:
+    with open(file, 'rb') as f:
       return pickle.load(f)
-  else:
+  elif PRINT_LOG:
     print(f'The file {file} does not exist.')
     
 def get_pair_TM(pair, channel, orientation):
-  file = f'Database\\TM\\{channel}\\{orientation}\\pair_{min(pair)}_{max(pair)}.pkl'
+  file = f'Database\\TM\\{BGR[channel]}\\{orientation}\\pair_{min(pair)}_{max(pair)}.pkl'
   if os.path.isfile(file):
-    with open(file, 'wb') as f:
+    with open(file, 'rb') as f:
       return pickle.load(f)
-  else:
+  elif PRINT_LOG:
+    print(f'The file {file} does not exist.')
+    
+def get_pairs(channel, orientation):
+  file = f'Database\\TM\\{BGR[channel]}\\{orientation}\\pairs.pkl'
+  if os.path.isfile(file):
+    with open(file, 'rb') as f:
+      return pickle.load(f)
+  elif PRINT_LOG:
     print(f'The file {file} does not exist.')
   
 def create_data(file, c = 'BGR', usv = True, string = False):
@@ -129,49 +131,54 @@ def create_data(file, c = 'BGR', usv = True, string = False):
 def create_TM(file):
   name = file[:file.index('.')]
   for channel in [BLUE, GREEN, RED]:
-    color = BGR[channel]
-    U, S, V = get_USV(file[:file.index('.')], color)
+    U, S, V = get_USV(name, channel)
     for i in range(S.shape[0]):
       u = np.round(U[:, i] * S[i] ** 0.5, DECIMALS)
       v = np.round(V[i, :] * S[i] ** 0.5, DECIMALS)
-      store_pair_TM(u, color, 'U', (v[j], v[j + 1]))
-      for j in range(len(v) - 1):
-        store_pair_TM(v, color, 'U', (u[j], u[j + 1]))
       for j in range(len(u) - 1):
-        store_pair_TM(u, color, 'V', (v[j], v[j + 1]))
+        store_pair_TM(v, channel, 'U', (u[j], u[j + 1]))
+      for j in range(len(v) - 1):
+        store_pair_TM(u, channel, 'V', (v[j], v[j + 1]))
+      store_TM(u, channel, 'U')
+      store_TM(v, channel, 'V')
         
 def expand_image(file, pixels, side = 'r'):
-  RANDOM = True
-  name = file[:file.index('.')]
-  size = cv.imread(file).shape
-  new_channel_arrs = [np.zeros(size[0], size[1] + pixels)] * 3
+  RANDOM = False
+  bgr = []
   for channel in [BLUE, GREEN, RED]:
-    color = BGR[channel]
-    U, S, V = get_USV(file[:file.index('.')], color)
-    tree = KDTree(pickle.load(f))
-    for i in len(U):
-      u = U[:, i] * S[i] ** 0.5
-      v = list(len(V[0]) + pixels)
-      v[pixels:] = V[i, :] * S[i] ** 0.5
-      tree_queries = [tree.query(min(U[j], U[j + 1]), max(U[j], U[j + 1])) for j in range(len(u))] # !!! Should I factor in distance?
-      best_pairs = [tree[t[1]] for t in tree_queries]
-      tm = get_TM(color, 'U')
-      probs = [tm.get_entry(nodeA, nodeB)/ (np.sum(tm.get_row(nodeA)) * np.sum(tm.get_col(nodeB))) ** 0.5 for nodeA, nodeB in best_pairs] # Uses Symmetric Normalization
-      probs = probs / np.linalg.norm(probs)
+    U, S, V = img_SVD(f'Input\\{file}', channel)
+    bgr.append(np.zeros((len(U), len(V[0]))))
+    tree = KDTree(list(get_pairs(channel, 'U')))
+    for i in range(len(S)):
+      u = np.round(U[:, i] * S[i] ** 0.5, DECIMALS)
+      v = np.concatenate(([0] * pixels, np.round(V[i, :] * S[i] ** 0.5, DECIMALS)))
+      tree_queries = [tree.query((min(u[j], u[j + 1]), max(u[j], u[j + 1]))) for j in range(len(u) - 1)] # !!! Should I factor in distance
+      best_pairs = [tree.data[t[1]] for t in tree_queries]
+      TM = get_TM(channel, 'U')
+      TM_probs = [TM.get_entry(nodeA, nodeB)/ (np.sum(TM.get_row(nodeA)) * np.sum(TM.get_column(nodeB))) ** 0.5 for nodeA, nodeB in best_pairs] # Uses Symmetric Normalization
+      TM_probs /= np.linalg.norm(TM_probs)
       aggregate_TM = AdjTM([])
       for j in range(len(best_pairs)):
-        aggregate_TM = aggregate_TM + get_pair_TM(best_pairs[i], f'{color}\\U') * probabilities[j]
-      exponentiated_aggregate_TM = aggregate_TM * 1
-      for k in range(pixels):
-        probabilities = exponentiated_aggregate_TM.get_column(aggregate_TM.index_map[np.abs(aggregate_TM.index_map - v[pixels]).argmin()])
-        probabilities = probabilities / np.linalg.norm(probabilities)
+        aggregate_TM += get_pair_TM(best_pairs[j], channel, 'U').stochastic() * TM_probs[j] 
+      exp_aggregate_TM = AdjTM.copy(aggregate_TM)
+      for j in range(pixels):
+        key_arr = np.array(list(aggregate_TM.index_map.keys()))
+        closest_value = key_arr[np.abs(key_arr - v[pixels]).argmin()]
+        entry_probs = exp_aggregate_TM.get_column(closest_value)
         if RANDOM:
-          v[pixels - k] = np.random.choice(range(len(aggregate_TM.index_map)), p=probabilities)
+          v[pixels - j] = np.random.choice(exp_aggregate_TM.index_map, p = entry_probs)
         else:
-          v[pixels - k] = aggregate_TM.get_node(np.argmax(probabilities)) 
-        exponentiated_aggregate_TM *= aggregate_TM
-      new_channel_arrs[channel] += u @ v     
-    
-  
-# create_data('pattern_1.png', string = True)
-# create_TM('pattern_1.png')
+          v[pixels - j] = exp_aggregate_TM.get_node(np.argmax(entry_probs))
+        exp_aggregate_TM *= aggregate_TM
+      bgr[channel] += np.array(u).reshape(-1, 1) @ np.array(u).reshape(1, -1)
+    return bgr  
+
+        
+create_data('pattern_1.png', string = True)
+create_TM('pattern_1.png')
+
+bgr_image = cv.merge(expand_image('pattern_1.png', 2))
+
+cv.imshow("Image", bgr_image)
+cv.waitKey(0)
+cv.destroyAllWindows()
