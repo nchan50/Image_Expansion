@@ -171,14 +171,11 @@ def expand_image(file, pixels, side = 'r'):
           v[pixels - j] = exp_aggregate_TM.get_node(np.argmax(entry_probs))
         exp_aggregate_TM *= aggregate_TM
       bgr[channel] += np.array(u).reshape(-1, 1) @ np.array(u).reshape(1, -1)
-    return bgr  
+  return bgr  
 
         
 create_data('pattern_1.png', string = True)
 create_TM('pattern_1.png')
 
-bgr_image = cv.merge(expand_image('pattern_1.png', 2))
-
-cv.imshow("Image", bgr_image)
-cv.waitKey(0)
-cv.destroyAllWindows()
+bgr = expand_image('pattern_1.png', 2)
+bgr_image = cv.merge(bgr)
