@@ -9,7 +9,7 @@ from AdjTM import AdjTM
 BLUE, GREEN, RED = 0, 1, 2 # Constants for color channels
 BGR = ['BLUE', 'GREEN', 'RED']
 WRITE_OVER_FILES = False
-PRINT_LOG = True
+PRINT_LOG = False
 DECIMALS = 10
 
 def img_SVD(file, channel):
@@ -244,10 +244,10 @@ def expand_image(file, pixels, sides = 'L'):
     RANDOM = False # RANDOM determines if extending the image is based on random probability or highest probability
     # LRTB is a dictionary containing metadata about side-dependent values and operations
     LRTB = {
-		'L': [0, 'U', 1, lambda UV, p: np.hstack((np.zeros((UV[1].shape[0], p)), UV[1])), lambda UV, i: list(UV[0][:, i]), lambda UV, i, p: list(UV[1][i, :])[p], lambda UV, i, j, e: UV[1].__setitem__((i, j), e)],
-		'R': [0, 'U', 1, lambda UV, p: np.hstack((UV[1], np.zeros((UV[1].shape[0], p)))), lambda UV, i: list(UV[0][:, i]), lambda UV, i, p: list(UV[1][i, :])[-(p + 1)], lambda UV, i, j, e: UV[1].__setitem__((i, -(j+1)), e)],
-		'T': [0, 'V', 0, lambda UV, p: np.vstack((np.zeros((p, UV[0].shape[1])), UV[0])), lambda UV, i: list(UV[1][i, :]), lambda UV, i, p: list(UV[0][:, i])[p], lambda UV, i, j, e: UV[0].__setitem__((j, i), e)],
-		'B': [0, 'V', 0, lambda UV, p: np.vstack((UV[0], np.zeros((p, UV[0].shape[1])))), lambda UV, i: list(UV[1][i, :]), lambda UV, i, p: list(UV[0][:, i])[-(p + 1)], lambda UV, i, j, e: UV[0].__setitem__((-(j+1), i), e)],
+		'L': [0, 'U', 1, lambda UV, p: np.hstack((np.zeros((UV[1].shape[0], p)), UV[1])), lambda UV, i: UV[0][:, i], lambda UV, i, p: list(UV[1][i, :].flatten())[p], lambda UV, i, j, e: UV[1].__setitem__((i, j), e)],
+		'R': [0, 'U', 1, lambda UV, p: np.hstack((UV[1], np.zeros((UV[1].shape[0], p)))), lambda UV, i: UV[0][:, i], lambda UV, i, p: list(UV[1][i, :].flatten())[-(p + 1)], lambda UV, i, j, e: UV[1].__setitem__((i, -(j+1)), e)],
+		'T': [0, 'V', 0, lambda UV, p: np.vstack((np.zeros((p, UV[0].shape[1])), UV[0])), lambda UV, i: UV[1][i, :], lambda UV, i, p: list(UV[0][:, i].flatten())[p], lambda UV, i, j, e: UV[0].__setitem__((j, i), e)],
+		'B': [0, 'V', 0, lambda UV, p: np.vstack((UV[0], np.zeros((p, UV[0].shape[1])))), lambda UV, i: UV[1][i, :], lambda UV, i, p: list(UV[0][:, i].flatten())[-(p + 1)], lambda UV, i, j, e: UV[0].__setitem__((-(j+1), i), e)],
 	}
     
     # Links pixel arguments to LRTB
@@ -269,12 +269,15 @@ def expand_image(file, pixels, sides = 'L'):
         UV = BGR_UV[channel]
         for side, values in LRTB.items():
             p = values[0]
+            if p == 0:
+                print('t')
+                continue
             orientation = values[1]
             o = values[2]
             UV[o] = values[3](UV, p)
             # KDTree Documentation: https://docs.scipy.org/doc/scipy-1.15.2/reference/generated/scipy.spatial.KDTree.html 
             tree = KDTree(list(get_pairs(channel, orientation)))
-            for i in range(UV[1 - o].shape[o]):
+            for i in range(UV[o].shape[1 - o]):
                 oriented_vector = values[4](UV, i)
                 tree_queries = [tree.query((min(oriented_vector[j], oriented_vector[j + 1]), max(oriented_vector[j], oriented_vector[j + 1]))) for j in range(len(oriented_vector) - 1)] # Set of indices and distance of closest point in the KDTree to the pair 
             		# !!! Should I factor in distance
@@ -288,7 +291,7 @@ def expand_image(file, pixels, sides = 'L'):
                 aggregate_TM = AdjTM([])
                 for j in range(len(best_pairs)):
                 	aggregate_TM += get_pair_TM(best_pairs[j], channel, orientation).stochastic() * TM_probs[j]
-                 
+                
                 # To predict the nth adjacent pixel, we raise our transition matrix to the nth power. We use matrix multiplication to save time complexity.
                 exp_aggregate_TM = AdjTM.copy(aggregate_TM)
                 for j in reversed(range(p)):
@@ -301,8 +304,7 @@ def expand_image(file, pixels, sides = 'L'):
                         entry = exp_aggregate_TM.get_node(np.argmax(entry_probs)) # Highest Probability Choice
                     values[6](UV, i, j, entry)
                     exp_aggregate_TM *= aggregate_TM
-    
-    return [np.clip(u @ v, 0, 255) for u, v in BGR_UV]
+    return [u @ v for u, v in BGR_UV]
 
 def display_image(img):
 	screen_width, screen_height = 1920, 1080 # Default screen dimensions
@@ -316,4 +318,4 @@ def display_image(img):
 create_data('pattern_2.png', string = True)
 create_TM('pattern_2.png')
 
-display_image(cv.merge(expand_image('pattern_2.png', [2, 5, 4, 2], 'LRBT')))
+display_image(cv.merge(expand_image('pattern_2.png', [10, 4, 9, 2], 'TBLR')))
