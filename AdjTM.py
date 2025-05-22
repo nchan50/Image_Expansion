@@ -81,3 +81,28 @@ class AdjTM:
             n = self.index_map[vector[i + 1]]
             self.TM[m, n] += 1
             self.TM[n, m] += 1
+    
+    def remove_vector(self, vector):
+        old_length = len(self.index_map)
+        old_index_map = self.index_map.copy()
+        for i in range(len(vector) - 1):
+            try: 
+                m = self.index_map[vector[i]]
+                n = self.index_map[vector[i + 1]]
+            except KeyError:
+                continue
+            self.TM[m, n] -= 1
+            self.TM[n, m] -= 1
+            if np.sum(self.TM[m, :]) == 0:
+                del self.index_map[self.reverse_map[m]]
+                del self.reverse_map[m]
+            if np.sum(self.TM[:, n]) == 0:
+                del self.index_map[self.reverse_map[n]]
+                del self.reverse_map[n]
+        if old_length != len(self.index_map):
+            newTM = np.zeros((len(self.index_map), len(self.index_map)), dtype = int)
+            for key, i in self.index_map.items():
+                if i >= len(self.index_map):
+                    self.index_map[key] = i + len(self.index_map) - old_length
+                newTM[self.index_map[key], :] = self.TM[old_index_map[key], [old_index_map[k] for k in self.index_map]]
+            self.TM = newTM
