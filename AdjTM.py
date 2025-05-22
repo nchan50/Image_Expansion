@@ -4,7 +4,7 @@ class AdjTM:
     def __init__(self, vector):
         self.index_map = {val: i for i, val in enumerate(set(vector))}
         self.reverse_map = {i: val for val, i in self.index_map.items()}
-        self.TM = np.zeros((len(self.index_map), len(self.index_map)), dtype = int)
+        self.TM = np.zeros((len(self.index_map), len(self.index_map)), dtype = float)
         for i in range(len(vector) - 1):
             m = self.index_map[vector[i]]
             n = self.index_map[vector[i + 1]]
@@ -31,13 +31,14 @@ class AdjTM:
         keys = set(self.index_map) | set(other.index_map)
         index_map = {val: i for i, val in enumerate(keys)}
         reverse_map = {i: val for val, i in index_map.items()}
-        TM = np.zeros((len(index_map), len(index_map)), dtype = int)
+        TM = np.zeros((len(index_map), len(index_map)), dtype = float)
         for key in keys:
             m = index_map[key]
             for tm in (self, other):
                 for val in tm.index_map:
-                    n = index_map[val]
-                    TM[m, n] += tm.TM[m, n]
+                    if key in tm.index_map:
+                        n = index_map[val]
+                        TM[m, n] += tm.get_entry(key, val)
         return AdjTM.from_parts(index_map, reverse_map, TM)
     
     def __mul__(self, other):
@@ -52,7 +53,7 @@ class AdjTM:
     
     def stochastic(self):
         col_sums = self.TM.sum(axis = 0, keepdims = True)
-        return AdjTM.from_parts(self.index_map, self.reverse_map, self.TM / col_sums)
+        return AdjTM.from_parts(self.index_map, self.reverse_map, self.TM/ col_sums)
             
     def get_entry(self, nodeA, nodeB):
         return self.TM[self.index_map[nodeA], self.index_map[nodeB]]
@@ -73,7 +74,7 @@ class AdjTM:
                 self.reverse_map[len(self.index_map)] = val
                 self.index_map[val] = len(self.index_map)
         if old_length != len(self.index_map):
-            newTM = np.zeros((len(self.index_map), len(self.index_map)), dtype = int)
+            newTM = np.zeros((len(self.index_map), len(self.index_map)), dtype = float)
             newTM[:self.TM.shape[0], :self.TM.shape[1]] = self.TM
             self.TM = newTM
         for i in range(len(vector) - 1):

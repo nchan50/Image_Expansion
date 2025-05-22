@@ -9,7 +9,7 @@ from AdjTM import AdjTM
 BLUE, GREEN, RED = 0, 1, 2 # Constants for color channels
 BGR = ['BLUE', 'GREEN', 'RED']
 WRITE_OVER_FILES = False
-PRINT_LOG = True
+PRINT_LOG = False
 DECIMALS = 10
 
 def img_SVD(file, channel):
@@ -154,7 +154,7 @@ def get_TM(channel, orientation):
         print(f'The file {file}.pkl does not exist.')
 
 def get_pair_TM(pair, channel, orientation):
-    file = f'Database\\TM\\{BGR[channel]}\\{orientation}\\pair_{min(pair)}_{max(pair)}'
+    file = f'Database\\TM\\{BGR[channel]}\\{orientation}\\pair_{min(pair)}_{max(pair)}.pkl'
     if os.path.isfile(file):
         with open(file, 'rb') as f:
             return pickle.load(f)
@@ -240,7 +240,7 @@ def expand_image(file, pixels, side = 'r'):
     bgr = list()
     for channel in [BLUE, GREEN, RED]:
         U, S, V = img_SVD(f'Input\\{file}', channel)
-        bgr.append(np.zeros((len(U), len(V[0]) + pixels)))
+        bgr.append(np.zeros((len(U), pixels + len(V[0]))))
         tree = KDTree(list(get_pairs(channel, 'U')))
         for i in range(len(S)):
             u = np.round(U[:, i] * S[i] ** 0.5, DECIMALS)
@@ -249,12 +249,12 @@ def expand_image(file, pixels, side = 'r'):
             best_pairs = [tree.data[t[1]] for t in tree_queries]
             TM = get_TM(channel, 'U')
             TM_probs = [TM.get_entry(nodeA, nodeB)/ (np.sum(TM.get_row(nodeA)) * np.sum(TM.get_column(nodeB))) ** 0.5 for nodeA, nodeB in best_pairs] # Uses Symmetric Normalization
-            TM_probs /= np.linalg.norm(TM_probs)
+            TM_probs /= np.sum(TM_probs)
             aggregate_TM = AdjTM([])
             for j in range(len(best_pairs)):
                 aggregate_TM += get_pair_TM(best_pairs[j], channel, 'U').stochastic() * TM_probs[j]
             exp_aggregate_TM = AdjTM.copy(aggregate_TM)
-            for j in range(pixels):
+            for j in range(1, pixels + 1):
                 key_arr = np.array(list(aggregate_TM.index_map.keys()))
                 closest_value = key_arr[np.abs(key_arr - V[i, 0] * S[i] ** 0.5).argmin()]
                 entry_probs = exp_aggregate_TM.get_column(closest_value)
@@ -269,23 +269,16 @@ def expand_image(file, pixels, side = 'r'):
 create_data('pattern_2.png', string = True)
 create_TM('pattern_2.png')
 
-#bgr_image = cv.merge(expand_image('pattern_2.png', 3))
+bgr_image = cv.merge(expand_image('pattern_2.png', 10))
 
-# Clip to valid 8-bit range
-#bgr_image = np.clip(bgr_image, 0, 255)
+bgr_image = np.clip(bgr_image, 0, 255)
 
-# Convert to uint8 for OpenCV
-#bgr_image = bgr_image.astype(np.uint8)
+bgr_image = bgr_image.astype(np.uint8)
+screen_width, screen_height = 1920, 1080
+resized_image = cv.resize(bgr_image, (screen_width, screen_height), interpolation=cv.INTER_NEAREST)
 
-# Get screen size (example for 1080p, adjust as needed or use pyautogui to detect it)
-#screen_width, screen_height = 1920, 1080  # or use actual screen size
-
-# Resize image
-#resized_image = cv.resize(bgr_image, (screen_width, screen_height), interpolation=cv.INTER_NEAREST)
-
-# Show fullscreen
-#cv.namedWindow("Image", cv.WND_PROP_FULLSCREEN)
-#cv.setWindowProperty("Image", cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
-#cv.imshow("Image", resized_image)
-#cv.waitKey(0)
-#cv.destroyAllWindows()
+cv.namedWindow("Image", cv.WND_PROP_FULLSCREEN)
+cv.setWindowProperty("Image", cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
+cv.imshow("Image", resized_image)
+cv.waitKey(0)
+cv.destroyAllWindows()
