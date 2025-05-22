@@ -235,50 +235,94 @@ def delete_TM(file):
             remove_TM(u, channel, 'U')
             remove_TM(v, channel, 'V')
 
-def expand_image(file, pixels, side = 'r'):
+def expand_image(file, pixels, sides = 'L'):
+    # side: Determine which sides to extend. left(L), right(R), top(T), bottom(B)
     RANDOM = False
-    bgr = list()
+    LRTB = dict()
+    if isinstance(pixels, (list, np.ndarray, set, tuple)):
+      if len(pixels) != len(sides):
+        raise ValueError('Invalid expansion')
+      else:
+        for i, char in enumerate(sides):
+          LRTB[char] = pixels[i]
+    else:
+      LRTB[sides] = pixels
+    BGR_UV = list()
     for channel in [BLUE, GREEN, RED]:
         U, S, V = img_SVD(f'Input\\{file}', channel)
-        bgr.append(np.zeros((len(U), pixels + len(V[0]))))
-        tree = KDTree(list(get_pairs(channel, 'U')))
-        for i in range(len(S)):
-            u = np.round(U[:, i] * S[i] ** 0.5, DECIMALS)
-            v = [0] * pixels
-            tree_queries = [tree.query((min(u[j], u[j + 1]), max(u[j], u[j + 1]))) for j in range(len(u) - 1)] # !!! Should I factor in distance
-            best_pairs = [tree.data[t[1]] for t in tree_queries]
-            TM = get_TM(channel, 'U')
-            TM_probs = [TM.get_entry(nodeA, nodeB)/ (np.sum(TM.get_row(nodeA)) * np.sum(TM.get_column(nodeB))) ** 0.5 for nodeA, nodeB in best_pairs] # Uses Symmetric Normalization
-            TM_probs /= np.sum(TM_probs)
-            aggregate_TM = AdjTM([])
-            for j in range(len(best_pairs)):
-                aggregate_TM += get_pair_TM(best_pairs[j], channel, 'U').stochastic() * TM_probs[j]
-            exp_aggregate_TM = AdjTM.copy(aggregate_TM)
-            for j in range(1, pixels + 1):
+        S_sqrt = np.diag([n ** 0.5 for n in S])
+        BGR_UV.append([np.round(U @ S_sqrt, DECIMALS), np.round(S_sqrt @ V, DECIMALS)])
+        UV = BGR_UV[channel]
+        for side, p in LRTB.items():
+          if side in ('L', 'R'):
+            if side == 'L':
+                UV[1] = np.hstack((np.zeros((UV[1].shape[0], p)), UV[1]))
+            if side == 'R':
+                UV[1] = np.hstack((UV[1], np.zeros((UV[1].shape[0], p))))
+            orientation = 'U'
+            s = UV[1].shape[0]
+          if side in ('T', 'B'):
+            if side == 'T':
+                UV[0] = np.vstack((np.zeros((p, UV[0].shape[1])), UV[0]))
+            if side == 'B':
+                UV[0] = np.vstack((UV[0], np.zeros((p, UV[0].shape[1]))))
+            orientation = 'V'
+            s = UV[0].shape[1]
+          tree = KDTree(list(get_pairs(channel, orientation)))
+          for i in range(s):
+              if orientation == 'U':
+                oriented_vector = UV[0][:, i]
+              if orientation == 'V':
+                oriented_vector = UV[1][i, :]
+              tree_queries = [tree.query((min(oriented_vector[j], oriented_vector[j + 1]), max(oriented_vector[j], oriented_vector[j + 1]))) for j in range(len(oriented_vector) - 1)] # !!! Should I factor in distance
+              best_pairs = [tree.data[t[1]] for t in tree_queries]
+              TM = get_TM(channel, orientation)
+              TM_probs = [TM.get_entry(nodeA, nodeB)/ (np.sum(TM.get_row(nodeA)) * np.sum(TM.get_column(nodeB))) ** 0.5 for nodeA, nodeB in best_pairs] # Uses Symmetric Normalization
+              TM_probs /= np.sum(TM_probs)
+              aggregate_TM = AdjTM([])
+              for j in range(len(best_pairs)):
+                  aggregate_TM += get_pair_TM(best_pairs[j], channel, orientation).stochastic() * TM_probs[j]
+              exp_aggregate_TM = AdjTM.copy(aggregate_TM) # Matrix multiplication faster than matrix exponentiation
+              for j in reversed(range(p)):
                 key_arr = np.array(list(aggregate_TM.index_map.keys()))
-                closest_value = key_arr[np.abs(key_arr - V[i, 0] * S[i] ** 0.5).argmin()]
+                if side == 'L':
+                  closest_value = key_arr[np.abs(key_arr - list(UV[1][i, :].flatten())[p]).argmin()]
+                if side == 'R':
+                  closest_value = key_arr[np.abs(key_arr - list(UV[1][i, :].flatten())[-(p + 1)]).argmin()]
+                if side == 'T':
+                  closest_value = key_arr[np.abs(key_arr - list(UV[0][:, i].flatten())[p]).argmin()]
+                if side == 'B':
+                  closest_value = key_arr[np.abs(key_arr - list(UV[0][:, i].flatten())[-(p + 1)]).argmin()]
                 entry_probs = exp_aggregate_TM.get_column(closest_value)
                 if RANDOM:
-                    v[-j] = np.random.choice(exp_aggregate_TM.index_map, p = entry_probs)
+                  entry = np.random.choice(exp_aggregate_TM.index_map, p = entry_probs)
                 else:
-                    v[-j] = exp_aggregate_TM.get_node(np.argmax(entry_probs))
+                  entry = exp_aggregate_TM.get_node(np.argmax(entry_probs))
+                if side == 'L':
+                    UV[1][i, j] = entry
+                if side == 'R':
+                    UV[1][i, -(j + 1)]= entry
+                if side == 'T':
+                    UV[0][j, i]= entry
+                if side == 'B':
+                    UV[0][-(j + 1), i]= entry
                 exp_aggregate_TM *= aggregate_TM
-            bgr[channel] += np.array(U[:, i] * S[i] ** 0.5).reshape(-1, 1) @ np.array(v + list(V[i, :] * S[i] ** 0.5)).reshape(1, -1)
-    return bgr  
+    return [u @ v for u, v in BGR_UV]
 
+def display_image(img):
+  img = np.clip(img, 0, 255)
+
+  img = img.astype(np.uint8)
+  screen_width, screen_height = 1920, 1080
+  img = cv.resize(img, (screen_width, screen_height), interpolation=cv.INTER_NEAREST)
+
+  cv.namedWindow("Image", cv.WND_PROP_FULLSCREEN)
+  cv.setWindowProperty("Image", cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
+  cv.imshow("Image", img)
+  cv.waitKey(0)
+  cv.destroyAllWindows()
+  
 create_data('pattern_2.png', string = True)
 create_TM('pattern_2.png')
 
-bgr_image = cv.merge(expand_image('pattern_2.png', 10))
-
-bgr_image = np.clip(bgr_image, 0, 255)
-
-bgr_image = bgr_image.astype(np.uint8)
-screen_width, screen_height = 1920, 1080
-resized_image = cv.resize(bgr_image, (screen_width, screen_height), interpolation=cv.INTER_NEAREST)
-
-cv.namedWindow("Image", cv.WND_PROP_FULLSCREEN)
-cv.setWindowProperty("Image", cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
-cv.imshow("Image", resized_image)
-cv.waitKey(0)
-cv.destroyAllWindows()
+display_image(cv.merge(expand_image('pattern_2.png', [2, 4, 5, 2], 'LRBT')))
