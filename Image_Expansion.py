@@ -13,229 +13,135 @@ PRINT_LOG = False
 DECIMALS = 10
 
 def img_SVD(file, channel):
-	u, s, v = np.linalg.svd(cv.imread(file)[:, :, channel], full_matrices = False)
-	# We append to for time complexity compared to delete()
-	U, S, V = list(), list(), list()
-	for c in range(len(s)):
-		if s[c] > 1e-8:
-			U.append(u[:, c])
-			S.append(s[c])
-			V.append(v[c, :])
-	return np.array(U).T, np.array(S), np.array(V) # Turn list into arrays
+    u, s, v = np.linalg.svd(cv.imread(file)[:, :, channel], full_matrices = False)
+    # We append to for time complexity compared to delete()
+    U, S, V = list(), list(), list()
+    for c in range(len(s)):
+        if s[c] > 1e-8:
+            U.append(u[:, c])
+            S.append(s[c])
+            V.append(v[c, :])
+    return np.array(U).T, np.array(S), np.array(V) # Turn list into arrays
 
 def store_USV(U, S, V, directory, name):
-	path = f'Database\\{directory}'
-	os.makedirs(path, exist_ok = True) # Creates directory
-	if not os.path.exists(f'{path}\\{name}.npz') or WRITE_OVER_FILES:
-		np.savez(f'{path}\\{name}', U = U, S = S, V = V) # Saves the U, S, and V arrays in a .npz file
-	elif PRINT_LOG:
-		print(f'{path}\\{name}.npz already exists.')
+    path = f'Database\\{directory}'
+    os.makedirs(path, exist_ok = True) # Creates directory
+    if not os.path.exists(f'{path}\\{name}.npz') or WRITE_OVER_FILES:
+        np.savez(f'{path}\\{name}', U = U, S = S, V = V) # Saves the U, S, and V arrays in a .npz file
+    elif PRINT_LOG:
+        print(f'{path}\\{name}.npz already exists.')
 
 def store_string(arr, directory, name):
-	path = f'Database\\{directory}\\str'
-	os.makedirs(path, exist_ok = True) # Creates directory
-	if not os.path.exists(f'{path}\\{name}.txt') or WRITE_OVER_FILES:
-		np.savetxt(f'{path}\\{name}.txt', arr, fmt='%.2f') # Saves an array in a text file
-	elif PRINT_LOG:
-		print(f'{path}\\{name}.txt already exists.')
+    path = f'Database\\{directory}\\str'
+    os.makedirs(path, exist_ok = True) # Creates directory
+    if not os.path.exists(f'{path}\\{name}.txt') or WRITE_OVER_FILES:
+        np.savetxt(f'{path}\\{name}.txt', arr, fmt='%.2f') # Saves an array in a text file
+    elif PRINT_LOG:
+        print(f'{path}\\{name}.txt already exists.')
 
 def store_TM(vector, channel, orientation):
-	file = f'Database\\TM\\{BGR[channel]}\\{orientation}\\transition.pkl'
-	try:
-		with open(file, 'rb') as f:
-			TM = pickle.load(f)
-	except IOError:
-		TM = AdjTM([])
-		with open(file, 'wb') as f:
-			pickle.dump(AdjTM([]), f)
-		TM.add_vector(vector)
-		with open(file, 'wb') as f:
-			pickle.dump(TM, f)
+    file = f'Database\\TM\\{BGR[channel]}\\{orientation}\\transition.pkl'
+    try:
+        with open(file, 'rb') as f:
+            TM = pickle.load(f)
+    except IOError:
+        TM = AdjTM([])
+        with open(file, 'wb') as f:
+            pickle.dump(AdjTM([]), f)
+    TM.add_vector(vector)
+    with open(file, 'wb') as f:
+        pickle.dump(TM, f)
 
 def store_pair_TM(vector, channel, orientation, pair):
-	path = f'Database\\TM\\{BGR[channel]}\\{orientation}'
-	name = f'pair_{min(pair)}_{max(pair)}.pkl'
-	os.makedirs(path, exist_ok = True) # Creates directory
-	if not os.path.exists(f'{path}\\{name}'):
-		with open(f'{path}\\{name}', 'wb') as f:
-			pickle.dump(AdjTM(vector), f) # Saves AdjTM object in a pkl file
-	else:
-		with open(f'{path}\\{name}', 'rb') as f:
-			TM = pickle.load(f)
-			TM.add_vector(vector)
-		with open(f'{path}\\{name}', 'wb') as f:
-			pickle.dump(TM, f)
-	try:
-		with open(f'{path}\\pairs.pkl', 'rb') as f:
-			pairs = pickle.load(f)
-	except IOError:
-		pairs = set()
-		with open(f'{path}\\pairs.pkl', 'wb') as f:
-			pickle.dump(pairs, f)
-	pairs.add((min(pair), max(pair)))
-	with open(f'{path}\\pairs.pkl', 'wb') as f:
-		pickle.dump(pairs, f)
-
-def remove_USV(directory, name):
-	file = f'Database\\{directory}\\{name}.npz'
-	try:
-		os.remove(file)
-	except FileNotFoundError and PRINT_LOG:
-		print(f'{file} does not exists.')
-
-def remove_string(directory, name):
-	path = f'Database\\{directory}\\str'
-	try:
-		os.remove(f'{path}\\{name}.txt')
-		if os.path.isdir(path) and not os.listdir(path):
-			os.rmdir(path)
-	except FileNotFoundError and PRINT_LOG:
-		print(f'{file} does not exists.')
-
-def remove_TM(vector, channel, orientation):
-	file = f'Database\\TM\\{BGR[channel]}\\{orientation}\\transition.pkl'
-	try:
-		with open(file, 'rb') as f:
-			TM = pickle.load(f)
-	except FileNotFoundError and PRINT_LOG:
-		print(f'{file} does not exists.')
-		return
-	TM.remove_vector(vector)
-	if TM.TM.shape[0] != 0:
-		with open(file, 'wb') as f:
-			pickle.dump(TM, f)
-	else:
-		os.remove(file)
-
-def remove_pair_TM(vector, channel, orientation, pair):
-	path = f'Database\\TM\\{BGR[channel]}\\{orientation}'
-	name = f'pair_{min(pair)}_{max(pair)}.pkl'
-	try:
-		with open(f'{path}\\{name}', 'rb') as f:
-			TM = pickle.load(f)
-	except FileNotFoundError and PRINT_LOG:
-		print(f'{path}\\{name} does not exists.')
-	TM.remove_vector(vector)
-	if TM.TM.shape[0] != 0:
-		with open(f'{path}\\{name}', 'wb') as f:
-			pickle.dump(TM, f)
-	else:
-		os.remove(f'{path}\\{name}')
-		pairs.remove((min(pair), max(pair)))
-	try:
-		with open(f'{path}\\pairs.pkl', 'rb') as f:
-			pairs = pickle.load(f)
-	except FileNotFoundError and PRINT_LOG:
-		print(f'{path}\\pairs.pkl does not exist')
-	if len(pairs) != 0:
-		with open(f'{path}\\pairs.pkl', 'wb') as f:
-			pickle.dump(pairs, f)
-	else:
-		os.remove(f'{path}\\pairs.pkl')
+    path = f'Database\\TM\\{BGR[channel]}\\{orientation}'
+    name = f'pair_{min(pair)}_{max(pair)}.pkl'
+    os.makedirs(path, exist_ok = True) # Creates directory
+    if not os.path.exists(f'{path}\\{name}'):
+        with open(f'{path}\\{name}', 'wb') as f:
+            pickle.dump(AdjTM(vector), f) # Saves AdjTM object in a pkl file
+    else:
+        with open(f'{path}\\{name}', 'rb') as f:
+            TM = pickle.load(f)
+        TM.add_vector(vector)
+        with open(f'{path}\\{name}', 'wb') as f:
+            pickle.dump(TM, f)
+    try:
+        with open(f'{path}\\pairs.pkl', 'rb') as f:
+            pairs = pickle.load(f)
+    except IOError:
+        pairs = set()
+        with open(f'{path}\\pairs.pkl', 'wb') as f:
+            pickle.dump(pairs, f)
+    pairs.add((min(pair), max(pair)))
+    with open(f'{path}\\pairs.pkl', 'wb') as f:
+        pickle.dump(pairs, f)
 
 def get_USV(name, channel, usv = 'USV'):
-	# usv: Letters determine which arrays are returned 
-
-	file = f'Database\\{name}\\{BGR[channel]}.npz'
-	if os.path.isfile(file):
-		arrs = list()
-		for i in ['U', 'S', 'V']:
-			if i in usv:
-				arrs.append(np.load(file)[i])
-		return tuple(arrs)
-	elif PRINT_LOG:
-		print(f'The file {file} does not exist.')
+    # usv: Letters determine which arrays are returned 
+    file = f'Database\\{name}\\{BGR[channel]}.npz'
+    if os.path.isfile(file):
+        arrs = list()
+        for i in ['U', 'S', 'V']:
+            if i in usv:
+                arrs.append(np.load(file)[i])
+        return tuple(arrs)
+    elif PRINT_LOG:
+        print(f'The file {file} does not exist.')
 
 def get_TM(channel, orientation):
-	file = f'Database\\TM\\{BGR[channel]}\\{orientation}\\transition.pkl'
-	if os.path.isfile(file):
-		with open(file, 'rb') as f:
-			return pickle.load(f)
-	elif PRINT_LOG:
-		print(f'The file {file}.pkl does not exist.')
+    file = f'Database\\TM\\{BGR[channel]}\\{orientation}\\transition.pkl'
+    if os.path.isfile(file):
+        with open(file, 'rb') as f:
+            return pickle.load(f)
+    elif PRINT_LOG:
+        print(f'The file {file}.pkl does not exist.')
 
 def get_pair_TM(pair, channel, orientation):
-	file = f'Database\\TM\\{BGR[channel]}\\{orientation}\\pair_{min(pair)}_{max(pair)}.pkl'
-	if os.path.isfile(file):
-		with open(file, 'rb') as f:
-			return pickle.load(f)
-	elif PRINT_LOG:
-		print(f'The file {file}.pkl does not exist.')
+    file = f'Database\\TM\\{BGR[channel]}\\{orientation}\\pair_{min(pair)}_{max(pair)}.pkl'
+    if os.path.isfile(file):
+        with open(file, 'rb') as f:
+            return pickle.load(f)
+    elif PRINT_LOG:
+        print(f'The file {file}.pkl does not exist.')
 
 def get_pairs(channel, orientation):
-	file = f'Database\\TM\\{BGR[channel]}\\{orientation}\\pairs.pkl'
-	if os.path.isfile(file):
-		with open(file, 'rb') as f:
-			return pickle.load(f)
-	elif PRINT_LOG:
-		print(f'The file {file} does not exist.')
+    file = f'Database\\TM\\{BGR[channel]}\\{orientation}\\pairs.pkl'
+    if os.path.isfile(file):
+        with open(file, 'rb') as f:
+            return pickle.load(f)
+    elif PRINT_LOG:
+        print(f'The file {file} does not exist.')
 
 def create_data(file, c = 'BGR', usv = True, string = False):
-	# c : Letters determine the channels selected
-	# usv : Determines if USV values are stored as a .npz file
-	# str : Determines if USV values are stored as a text file
-
-	path = f'Patterns\\{file}'
-	name = file[:file.index('.')]
-	for channel in [BLUE, GREEN, RED]:
-		color = BGR[channel]
-		if color[0] in c:
-			U, S, V = img_SVD(path, channel)
-		if usv: 
-			store_USV(U, S, V, name, color)
-		if string: 
-			store_string(U, name, f'{color}_U')
-			store_string(S, name, f'{color}_S')
-			store_string(V, name, f'{color}_V')
+    # c : Letters determine the channels selected
+    # usv : Determines if USV values are stored as a .npz file
+    # str : Determines if USV values are stored as a text file
+    path = f'Patterns\\{file}'
+    name = file[:file.index('.')]
+    for channel in [BLUE, GREEN, RED]:
+        color = BGR[channel]
+        if color[0] in c:
+            U, S, V = img_SVD(path, channel)
+            if usv: 
+                store_USV(U, S, V, name, color)
+            if string: 
+                store_string(U, name, f'{color}_U')
+                store_string(S, name, f'{color}_S')
+                store_string(V, name, f'{color}_V')
 
 def create_TM(file):
-	name = file[:file.index('.')]
-	for channel in [BLUE, GREEN, RED]:
-		U, S, V = get_USV(name, channel)
-		for i in range(S.shape[0]):
-			u = np.round(U[:, i] * S[i] ** 0.5, DECIMALS)
-			v = np.round(V[i, :] * S[i] ** 0.5, DECIMALS)
-		for j in range(len(u) - 1):
-			store_pair_TM(v, channel, 'U', (u[j], u[j + 1]))
-		for j in range(len(v) - 1):
-			store_pair_TM(u, channel, 'V', (v[j], v[j + 1]))
-		store_TM(u, channel, 'U')
-		store_TM(v, channel, 'V')
-
-def delete_data(file, c = 'BGR', usv = True, string = False):
-	# c : Letters determine the channels selected
-	# usv : Determines if USV values npz files are deleted
-	# str : Determines if USV values txt files are are deleted
-
-	name = file[:file.index('.')]
-	for channel in [BLUE, GREEN, RED]:
-		color = BGR[channel]
-		if color[0] in c:
-			if usv: 
-				remove_USV(name, color)
-			if string: 
-				remove_string(name, f'{color}_U')
-				remove_string(name, f'{color}_S')
-				remove_string(name, f'{color}_V')
-	if os.path.isdir(f'Database\\{name}') and not os.listdir(f'Database\\{name}'):
-		os.rmdir(f'Database\\{name}')
-
-def delete_TM(file):
-	name = file[:file.index('.')]
-	for channel in [BLUE, GREEN, RED]:
-		if os.path.isfile(f'Database\\{name}\\{BGR[channel]}.npz'):
-			U, S, V = get_USV(name, channel)
-		else:
-			U, S, V = img_SVD(f'Patterns\\{file}', channel)
-		for i in range(S.shape[0]):
-			u = np.round(U[:, i] * S[i] ** 0.5, DECIMALS)
-			v = np.round(V[i, :] * S[i] ** 0.5, DECIMALS)
-			for j in range(len(u) - 1):	
-				remove_pair_TM(v, channel, 'U', (u[j], u[j + 1]))
-			for j in range(len(v) - 1):
-				remove_pair_TM(u, channel, 'V', (v[j], v[j + 1]))
-			remove_TM(u, channel, 'U')
-			remove_TM(v, channel, 'V')
+    name = file[:file.index('.')]
+    for channel in [BLUE, GREEN, RED]:
+        U, S, V = get_USV(name, channel)
+        for i in range(S.shape[0]):
+            u = np.round(U[:, i] * S[i] ** 0.5, DECIMALS)
+            v = np.round(V[i, :] * S[i] ** 0.5, DECIMALS)
+            for j in range(len(u) - 1):
+                store_pair_TM(v, channel, 'U', (u[j], u[j + 1]))
+            for j in range(len(v) - 1):
+                store_pair_TM(u, channel, 'V', (v[j], v[j + 1]))
+            store_TM(u, channel, 'U')
+            store_TM(v, channel, 'V')
 
 
 def expand_image(file, pixels, sides = 'L'):
@@ -270,7 +176,6 @@ def expand_image(file, pixels, sides = 'L'):
 		for side, values in LRTB.items():
 			p = values[0]
 			if p == 0:
-				print('t')
 				continue
 			orientation = values[1]
 			o = values[2]
@@ -304,7 +209,7 @@ def expand_image(file, pixels, sides = 'L'):
 						entry = exp_aggregate_TM.get_node(np.argmax(entry_probs)) # Highest Probability Choice
 					values[6](UV, i, j, entry)
 					exp_aggregate_TM *= aggregate_TM
-	return [u @ v for u, v in BGR_UV]
+	return [np.clip(u @ v, 0, 255) for u, v in BGR_UV]
 
 def display_image(img):
 	screen_width, screen_height = 1920, 1080 # Default screen dimensions
@@ -314,8 +219,21 @@ def display_image(img):
 	img = cv.resize(img, (screen_width, screen_height), interpolation = cv.INTER_NEAREST_EXACT) # Resizes image
 	cv.imshow("Image", img) # Shows image
 	cv.waitKey(0) # Displays image indefinitely
+ 
+def delete_dir_recursive(path):
+    if not os.path.exists(path):
+        return
+    for filename in os.listdir(path):
+        filepath = os.path.join(path, filename)
+        if os.path.isdir(filepath):
+            delete_dir_recursive(filepath)
+        else:
+            os.remove(filepath)
+    os.rmdir(path)
+    
+delete_dir_recursive('Database')    
+ 
+create_data('pattern_5.png', string = True)
+create_TM('pattern_5.png')
 
-create_data('pattern_2.png', string = True)
-create_TM('pattern_2.png')
-
-display_image(cv.merge(expand_image('pattern_2.png', [10, 4, 9, 2], 'TBLR')))
+display_image(cv.merge(expand_image('pattern_5.png', [10, 4, 9, 2], 'TBLR')))
