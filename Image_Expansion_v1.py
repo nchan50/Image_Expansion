@@ -1,6 +1,6 @@
 import numpy as np  # Linear Algebraic Functions
 import cv2 as cv  # Image Comprehension
-import os  # Manages directories
+import os  # Manages directories and files
 import pickle  # Stores objects in a file
 from scipy.spatial import KDTree  # Used for organizing tuple pairs
 
@@ -8,13 +8,13 @@ from AdjTM import AdjTM
 
 BLUE, GREEN, RED = 0, 1, 2  # Constants for color channels
 BGR = ['BLUE', 'GREEN', 'RED']
-WRITE_OVER_FILES = False
+WRITE_OVER_FILES = True
 PRINT_LOG = False
 DECIMALS = 10
 
 
 def img_SVD(file, channel):
-    u, s, v = np.linalg.svd(cv.imread(file)[:, :, channel], full_matrices=False)
+    u, s, v = np.linalg.svd(cv.imread(file)[:, :, channel], full_matrices = False)
     # We append to for time complexity compared to delete()
     U, S, V = list(), list(), list()
     for c in range(len(s)):
@@ -27,22 +27,18 @@ def img_SVD(file, channel):
 
 def store_USV(U, S, V, directory, name):
     path = f'Samples_v1\\{directory}'
-    os.makedirs(path, exist_ok=True)  # Creates directory
+    os.makedirs(path, exist_ok = True)  # Creates directory
     if not os.path.exists(f'{path}\\{name}.npz') or WRITE_OVER_FILES:
-        np.savez(
-            f'{path}\\{name}', U=U, S=S, V=V
-        )  # Saves the U, S, and V arrays in a .npz file
+        np.savez(f'{path}\\{name}', U = U, S = S, V = V)  # Saves the U, S, and V arrays in a .npz file
     elif PRINT_LOG:
         print(f'{path}\\{name}.npz already exists.')
 
 
 def store_string(arr, directory, name):
     path = f'Samples_v1\\{directory}\\str'
-    os.makedirs(path, exist_ok=True)  # Creates directory
+    os.makedirs(path, exist_ok = True)  # Creates directory
     if not os.path.exists(f'{path}\\{name}.txt') or WRITE_OVER_FILES:
-        np.savetxt(
-            f'{path}\\{name}.txt', arr, fmt='%.2f'
-        )  # Saves an array in a text file
+        np.savetxt( f'{path}\\{name}.txt', arr, fmt = '%.2f')  # Saves an array in a text file
     elif PRINT_LOG:
         print(f'{path}\\{name}.txt already exists.')
 
@@ -64,7 +60,7 @@ def store_TM(vector, channel, orientation):
 def store_pair_TM(vector, channel, orientation, pair):
     path = f'Samples_v1\\TM\\{BGR[channel]}\\{orientation}'
     name = f'pair_{min(pair)}_{max(pair)}.pkl'
-    os.makedirs(path, exist_ok=True)  # Creates directory
+    os.makedirs(path, exist_ok = True)  # Creates directory
     if not os.path.exists(f'{path}\\{name}'):
         with open(f'{path}\\{name}', 'wb') as f:
             pickle.dump(AdjTM(vector), f)  # Saves AdjTM object in a pkl file
@@ -86,7 +82,7 @@ def store_pair_TM(vector, channel, orientation, pair):
         pickle.dump(pairs, f)
 
 
-def get_USV(name, channel, usv='USV'):
+def get_USV(name, channel, usv = 'USV'):
     # usv: Letters determine which arrays are returned
     file = f'Samples_v1\\{name}\\{BGR[channel]}.npz'
     if os.path.isfile(file):
@@ -109,9 +105,7 @@ def get_TM(channel, orientation):
 
 
 def get_pair_TM(pair, channel, orientation):
-    file = (
-        f'Samples_v1\\TM\\{BGR[channel]}\\{orientation}\\pair_{min(pair)}_{max(pair)}.pkl'
-    )
+    file = f'Samples_v1\\TM\\{BGR[channel]}\\{orientation}\\pair_{min(pair)}_{max(pair)}.pkl'
     if os.path.isfile(file):
         with open(file, 'rb') as f:
             return pickle.load(f)
@@ -128,7 +122,7 @@ def get_pairs(channel, orientation):
         print(f'The file {file} does not exist.')
 
 
-def create_data(file, c='BGR', usv=True, string=False):
+def create_data(file, c = 'BGR', usv = True, string = False):
     # c : Letters determine the channels selected
     # usv : Determines if USV values are stored as a .npz file
     # str : Determines if USV values are stored as a text file
@@ -161,7 +155,9 @@ def create_TM(file):
             store_TM(v, channel, 'V')
 
 
-def expand_image(file, pixels, sides='L'):
+def expand_image(file, pixels, sides = 'L'):
+    create_data(file)
+    create_TM(file)
     # sides: Determines which sides to extend. left(L), right(R), top(T), bottom(B)
 
     RANDOM = False  # RANDOM determines if extending the image is based on random probability or highest probability
@@ -236,13 +232,8 @@ def expand_image(file, pixels, sides='L'):
             for i in range(UV[o].shape[1 - o]):
                 oriented_vector = values[4](UV, i)
                 tree_queries = [
-                    tree.query(
-                        (
-                            min(oriented_vector[j], oriented_vector[j + 1]),
-                            max(oriented_vector[j], oriented_vector[j + 1]),
-                        )
-                    )
-                    for j in range(len(oriented_vector) - 1)
+                    tree.query((min(oriented_vector[j], oriented_vector[j + 1]), max(oriented_vector[j], oriented_vector[j + 1])))
+                            for j in range(len(oriented_vector) - 1)
                 ]  # Set of indices and distance of closest point in the KDTree to the pair
                 # !!! Should I factor in distance
                 best_pairs = [tree.data[t[1]] for t in tree_queries]
@@ -258,45 +249,33 @@ def expand_image(file, pixels, sides='L'):
                 # Constructing the best transition matrix to extend the image
                 aggregate_TM = AdjTM([])
                 for j in range(len(best_pairs)):
-                    aggregate_TM += (
-                        get_pair_TM(best_pairs[j], channel, orientation).stochastic()
-                        * TM_probs[j]
-                    )
+                    aggregate_TM += get_pair_TM(best_pairs[j], channel, orientation).stochastic() * TM_probs[j]
 
                 # To predict the nth adjacent pixel, we raise our transition matrix to the nth power. We use matrix multiplication to save time complexity.
                 exp_aggregate_TM = AdjTM.copy(aggregate_TM)
                 for j in reversed(range(p)):
                     key_arr = np.array(list(aggregate_TM.index_map.keys()))
-                    closest_value = key_arr[
-                        np.abs(key_arr - values[5](UV, i, p)).argmin()
-                    ]
+                    closest_value = key_arr[np.abs(key_arr - values[5](UV, i, p)).argmin()]
                     entry_probs = exp_aggregate_TM.get_column(closest_value)
                     if RANDOM:
-                        entry = np.random.choice(
-                            list(exp_aggregate_TM.index_map.keys()), p=entry_probs
-                        )  # Random Probability Choice
+                        entry = np.random.choice(list(exp_aggregate_TM.index_map.keys()), p = entry_probs)  # Random Probability Choice
                     else:
-                        entry = exp_aggregate_TM.get_node(
-                            np.argmax(entry_probs)
-                        )  # Highest Probability Choice
-                    if j == 0 or j == 3:
-                        print(entry)
+                        entry = exp_aggregate_TM.get_node(np.argmax(entry_probs))  # Highest Probability Choice
                     values[6](UV, i, j, entry)
                     exp_aggregate_TM *= aggregate_TM
     return [np.clip(u @ v, 0, 255) for u, v in BGR_UV]
 
 
-def display_image(img):
-    screen_width, screen_height = 1500, 750  # Default screen dimensions
+def display_image(img, name = 'None'):
+    screen_width, screen_height = 1000, 1000  # Default screen dimensions
     img = img.astype(np.uint8)  # Makes image compatible with OpenCV
 
     # OpenCV Documentation: https://docs.opencv.org/4.x/d7/dfc/group__highgui.html
-    img = cv.resize(
-        img, (screen_width, screen_height), interpolation=cv.INTER_NEAREST_EXACT
-    )  # Resizes image
-    cv.imshow('Image', img)  # Shows image
+    cv.namedWindow(name, cv.WINDOW_GUI_EXPANDED)
+    cv.resizeWindow(name, screen_width, screen_height) 
+    img = cv.resize(img, (screen_width, screen_height), interpolation = cv.INTER_NEAREST_EXACT)  # Resizes image
+    cv.imshow(name, img)  # Shows image
     cv.waitKey(0)  # Displays image indefinitely
-
 
 def delete_dir_recursive(path):
     if not os.path.exists(path):
@@ -308,25 +287,3 @@ def delete_dir_recursive(path):
         else:
             os.remove(filepath)
     os.rmdir(path)
-
-
-# delete_dir_recursive('Samples_v1')
-
-# create_data('pattern_2.png', string = True)
-# create_TM('pattern_2.png')
-
-# create_data('pattern_3.png', string = True)
-# create_TM('pattern_3.png')
-# create_data('pattern_4.png', string = True)
-# create_TM('pattern_4.png')
-# create_data('pattern_5.png', string = True)
-# create_TM('pattern_5.png')
-# create_data('pattern_6.png', string = True)
-# create_TM('pattern_6.png')
-
-create_data('pattern_1.png', string=True)
-create_TM('pattern_1.png')
-
-expand_image('pattern_1.png', [4, 0, 0, 0], 'LRBT')
-# print(expand_image('pattern_1.png', [4, 0, 0, 0], 'LRBT')[0])
-# display_image(cv.merge(expand_image('pattern_1.png', [4, 0, 0, 0], 'LRBT')))
